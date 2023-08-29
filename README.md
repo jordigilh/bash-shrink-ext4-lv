@@ -27,3 +27,6 @@ The script leverages on the following linux utilities:
 * /usr/bin/findmnt: Determine if a device is mounted.
 * /usr/bin/lsblk: Obtain the current device block size and the device name, when the UUID is provided.
 * /usr/sbin/lvreduce: Reduce the logical volume and file system of the device.
+* /usr/bin/awk: Extracting the UUID value from `/etc/fstab` to find the relative device name and retrieve the last line output by the `/usr/bin/df` command.
+* /usr/sbin/blockdev: Determine the block size of the file system.
+* /usr/sbin/fsck: Determine the amount of free blocks available in the file system.
