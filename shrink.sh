@@ -87,7 +87,7 @@ function is_lvm(){
 }
 
 function parse_uuid() {
-    uuid=$(echo "$1"| awk '{print $1}'|awk -F'UUID=' '{print $2}')
+    uuid=$(/usr/bin/awk '{print $1}'<<< $1|/usr/bin/awk -F'UUID=' '{print $2}')
     val=$(/usr/bin/lsblk /dev/disk/by-uuid/"$uuid" -o NAME --noheadings)
     status=$?
     if [[ $status -ne 0 ]]; then
@@ -119,12 +119,22 @@ function check_volume_size() {
 }
 
 function check_filesystem_size() {
-    blocksUsed=$(fsck -n "$1" 2>/dev/null | awk 'END{print $5}'| awk -F'/' '{print $1}')
+    devSummary=$(/usr/sbin/fsck -n "$1" 2>/dev/null)
     status=$?
     if [[ $status -ne 0 ]]; then
         return $status
     fi
-    blockSize=$(blockdev --getbsz "$1")
+    blocks=$(/usr/bin/awk 'END{print $5}' <<< $devSummary)
+    status=$?
+    if [[ $status -ne 0 ]]; then
+        return $status
+    fi
+    blocksUsed=$(/usr/bin/awk -F'/' '{print $1}' <<< $blocks)
+    status=$?
+    if [[ $status -ne 0 ]]; then
+        return $status
+    fi
+    blockSize=$(/usr/sbin/blockdev --getbsz "$1")
     status=$?
     if [[ $status -ne 0 ]]; then
         return $status
@@ -242,11 +252,10 @@ function main() {
     for entry in "${devices[@]}"
     do
         device_name=$( get_device_name "$entry" )
-#        echo "entry is $entry" >&2
         update_return_status_code $?
-        opts=$( awk '{print $4}' <<< "$entry" )
+        opts=$( /usr/bin/awk '{print $4}' <<< "$entry" )
         update_return_status_code $?
-        process_entry "$device_name" "$opts" "$( awk '{print $1}' <<< "$entry" )"
+        process_entry "$device_name" "$opts" "$( /usr/bin/awk '{print $1}' <<< "$entry" )"
         update_return_status_code $?
     done
 
