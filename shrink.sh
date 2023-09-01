@@ -128,7 +128,7 @@ function check_filesystem_size() {
     if [[ $status -ne 0 ]]; then
         return $status
     fi
-    blocks=$(/usr/bin/awk 'END{print $5}' <<< $devSummary)
+    blocks=$(/usr/bin/awk -F',' 'END{print $3}' <<< $devSummary)
     status=$?
     if [[ $status -ne 0 ]]; then
         return $status
