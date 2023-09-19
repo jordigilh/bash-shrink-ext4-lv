@@ -91,7 +91,7 @@ function is_lvm(){
 }
 
 function parse_uuid() {
-    uuid=$(/usr/bin/awk '{print $1}'<<< $1|/usr/bin/awk -F'UUID=' '{print $2}')
+    uuid=$(/usr/bin/awk '{print $1}'<<< "$1"|/usr/bin/awk -F'UUID=' '{print $2}')
     val=$(/usr/bin/lsblk /dev/disk/by-uuid/"$uuid" -o NAME --noheadings 2>/dev/null)
     status=$?
     if [[ $status -ne 0 ]]; then
@@ -112,47 +112,44 @@ function shrink_volume() {
 function check_volume_size() {
     current_size=$(get_current_volume_size "$1")
     if [[ $current_size -lt $2 ]];then
-        echo "Current volume size for device $1 ("$current_size" bytes) is lower to expected "$2" bytes" >&2
+        echo "Current volume size for device $1 ($current_size bytes) is lower to expected $2 bytes" >&2
         return 1
     fi
     if [[ $current_size -eq $2 ]]; then
-        echo "Current volume size for device $1 already equals "$2" bytes" >&2
+        echo "Current volume size for device $1 already equals $2 bytes" >&2
         return 1
     fi
     return $?
 }
 
+function calculate_expected_resized_file_system_size_in_blocks(){
+    local device=$1
+    increment_boot_partition_in_blocks=$(convert_size_to_fs_blocks "$device" "$INCREMENT_BOOT_PARTITION_SIZE_IN_BYTES")
+    total_block_count=$(/usr/sbin/tune2fs -l "$device" | /usr/bin/awk '/Block count:/{print $3}')
+    new_fs_size_in_blocks=$(( total_block_count - increment_boot_partition_in_blocks ))
+    echo $new_fs_size_in_blocks
+}
+
 function check_filesystem_size() {
-    devSummary=$(/usr/sbin/fsck -n "$1" 2>/dev/null)
-    status=$?
-    if [[ $status -ne 0 ]]; then
-        return $status
+    local device=$1
+    local new_fs_size_in_blocks=$2
+    new_fs_size_in_blocks=$(calculate_expected_resized_file_system_size_in_blocks "$device")
+    # it is possible that running this command after resizing it might give an even smaller number. 
+    minimum_blocks_required=$(/usr/sbin/resize2fs -P "$device" 2> /dev/null | /usr/bin/awk  '{print $NF}')
+
+    if [[ "$new_fs_size_in_blocks" -le "0" ]]; then
+        echo "Unable to shrink volume: New size is 0 blocks"
+        return 1
     fi
-    blocks=$(/usr/bin/awk -F',' 'END{print $3}' <<< $devSummary)
-    status=$?
-    if [[ $status -ne 0 ]]; then
-        return $status
-    fi
-    blocksUsed=$(/usr/bin/awk -F'/' '{print $1}' <<< $blocks)
-    status=$?
-    if [[ $status -ne 0 ]]; then
-        return $status
-    fi
-    blockSize=$(/usr/sbin/blockdev --getbsz "$1")
-    status=$?
-    if [[ $status -ne 0 ]]; then
-        return $status
-    fi
-    bytesAllocated=$(( $blocksUsed * $blockSize ))
-    if [[ $bytesAllocated -gt $2 ]]; then
-        echo "Unable to shrink volume: Current used space in file system for device $1 ("$bytesAllocated" bytes) is greater than the new volume size "$2" bytes" >&2
+    if [[ $minimum_blocks_required -gt $new_fs_size_in_blocks ]]; then
+        echo "Unable to shrink volume: Estimated minimum size of the file system $1 ($minimum_blocks_required blocks) is greater than the new size $new_fs_size_in_blocks blocks" >&2
         return 1
     fi
     return 0
 }
 
 function process_entry() {
-    msg=$(is_lvm "$1" "$3")
+    is_lvm "$1" "$3"
     status=$?
     if [[ $status -ne 0 ]]; then
         return "$status"
@@ -181,11 +178,6 @@ function process_entry() {
     return $?
 }
 
-function update_return_status_code() {
-    if [[ $1 -ne 0 ]]; then
-        run_status=$1
-    fi
-}
 
 function display_help() {
     echo "Program to shrink an ext4 file system hosted in a Logical Volume. It retrieves the new size from the value of the option named systemd.shrinkfs captured in the /etc/fstab entry of the device. 
