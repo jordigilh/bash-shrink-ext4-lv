@@ -91,7 +91,7 @@ function is_lvm(){
 }
 
 function parse_uuid() {
-    uuid=$(/usr/bin/awk '{print $1}'<<< $1|/usr/bin/awk -F'UUID=' '{print $2}')
+    uuid=$(/usr/bin/awk '{print $1}'<<< "$1"|/usr/bin/awk -F'UUID=' '{print $2}')
     val=$(/usr/bin/lsblk /dev/disk/by-uuid/"$uuid" -o NAME --noheadings 2>/dev/null)
     status=$?
     if [[ $status -ne 0 ]]; then
@@ -112,11 +112,11 @@ function shrink_volume() {
 function check_volume_size() {
     current_size=$(get_current_volume_size "$1")
     if [[ $current_size -lt $2 ]];then
-        echo "Current volume size for device $1 ("$current_size" bytes) is lower to expected "$2" bytes" >&2
+        echo "Current volume size for device $1 ($current_size bytes) is lower to expected $2 bytes" >&2
         return 1
     fi
     if [[ $current_size -eq $2 ]]; then
-        echo "Current volume size for device $1 already equals "$2" bytes" >&2
+        echo "Current volume size for device $1 already equals $2 bytes" >&2
         return 1
     fi
     return $?
@@ -149,7 +149,7 @@ function check_filesystem_size() {
 }
 
 function process_entry() {
-    msg=$(is_lvm "$1" "$3")
+    is_lvm "$1" "$3"
     status=$?
     if [[ $status -ne 0 ]]; then
         return "$status"
@@ -178,11 +178,6 @@ function process_entry() {
     return $?
 }
 
-function update_return_status_code() {
-    if [[ $1 -ne 0 ]]; then
-        run_status=$1
-    fi
-}
 
 function display_help() {
     echo "Program to shrink an ext4 file system hosted in a Logical Volume. It retrieves the new size from the value of the option named systemd.shrinkfs captured in the /etc/fstab entry of the device. 
