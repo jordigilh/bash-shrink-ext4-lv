@@ -122,30 +122,27 @@ function check_volume_size() {
     return $?
 }
 
+function calculate_expected_resized_file_system_size_in_blocks(){
+    local device=$1
+    increment_boot_partition_in_blocks=$(convert_size_to_fs_blocks "$device" "$INCREMENT_BOOT_PARTITION_SIZE_IN_BYTES")
+    total_block_count=$(/usr/sbin/tune2fs -l "$device" | /usr/bin/awk '/Block count:/{print $3}')
+    new_fs_size_in_blocks=$(( total_block_count - increment_boot_partition_in_blocks ))
+    echo $new_fs_size_in_blocks
+}
+
 function check_filesystem_size() {
-    devSummary=$(/usr/sbin/fsck -n "$1" 2>/dev/null)
-    status=$?
-    if [[ $status -ne 0 ]]; then
-        return $status
+    local device=$1
+    local new_fs_size_in_blocks=$2
+    new_fs_size_in_blocks=$(calculate_expected_resized_file_system_size_in_blocks "$device")
+    # it is possible that running this command after resizing it might give an even smaller number. 
+    minimum_blocks_required=$(/usr/sbin/resize2fs -P "$device" 2> /dev/null | /usr/bin/awk  '{print $NF}')
+
+    if [[ "$new_fs_size_in_blocks" -le "0" ]]; then
+        echo "Unable to shrink volume: New size is 0 blocks"
+        return 1
     fi
-    blocks=$(/usr/bin/awk -F',' 'END{print $3}' <<< $devSummary)
-    status=$?
-    if [[ $status -ne 0 ]]; then
-        return $status
-    fi
-    blocksUsed=$(/usr/bin/awk -F'/' '{print $1}' <<< $blocks)
-    status=$?
-    if [[ $status -ne 0 ]]; then
-        return $status
-    fi
-    blockSize=$(/usr/sbin/blockdev --getbsz "$1")
-    status=$?
-    if [[ $status -ne 0 ]]; then
-        return $status
-    fi
-    bytesAllocated=$(( $blocksUsed * $blockSize ))
-    if [[ $bytesAllocated -gt $2 ]]; then
-        echo "Unable to shrink volume: Current used space in file system for device $1 ("$bytesAllocated" bytes) is greater than the new volume size "$2" bytes" >&2
+    if [[ $minimum_blocks_required -gt $new_fs_size_in_blocks ]]; then
+        echo "Unable to shrink volume: Estimated minimum size of the file system $1 ($minimum_blocks_required blocks) is greater than the new size $new_fs_size_in_blocks blocks" >&2
         return 1
     fi
     return 0
