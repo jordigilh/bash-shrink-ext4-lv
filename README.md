@@ -10,15 +10,16 @@ In this case, the script will attempt to shrink the device in `/dev/mapper/fedor
 Example:
 
 ```bash
-$>./shrink.sh -d=/dev/mapper/fedora-fedora
-fsck from util-linux 2.38-rc1
-/dev/mapper/fedora-fedora: clean, 11/256000 files, 36966/1048576 blocks
-resize2fs 1.46.5 (30-Dec-2021)
-Resizing the filesystem on /dev/mapper/fedora-fedora to 786432 (4k) blocks.
-The filesystem on /dev/mapper/fedora-fedora is now 786432 (4k) blocks long.
+[root@localhost ~]# ./shrink.sh -d=/dev/mapper/rhel-home
+fsck from util-linux 2.23.2
+/dev/mapper/rhel-home: 11/1175040 files (0.0% non-contiguous), 117810/4718592 blocks
+resize2fs 1.42.9 (28-Dec-2013)
+The filesystem is already 4718592 blocks long.  Nothing to do!
 
-  Size of logical volume fedora/fedora changed from 4.00 GiB (1024 extents) to 3.00 GiB (768 extents).
-  Logical volume fedora/fedora successfully resized.
+  Size of logical volume rhel/home changed from 20.01 GiB (5123 extents) to 18.00 GiB (4608 extents).
+  Logical volume rhel/home successfully resized.
+[root@localhost ~]# ./shrink.sh -d=/dev/mapper/rhel-home
+Current volume size for device /dev/mapper/rhel-home already equals 19327352832 bytes
 ```
 
 ## Dependencies
@@ -26,7 +27,8 @@ The script leverages on the following linux utilities:
 * /usr/bin/numfmt: Bytes conversion.
 * /usr/bin/findmnt: Determine if a device is mounted.
 * /usr/bin/lsblk: Obtain the current device block size and the device name, when the UUID is provided.
-* /usr/sbin/lvreduce: Reduce the logical volume and file system of the device.
+* /usr/sbin/lvm: Reduce the logical volume and file system of the device.
 * /usr/bin/awk: Extracting the UUID value from `/etc/fstab` to find the relative device name and retrieve the last line output by the `/usr/bin/df` command.
-* /usr/sbin/blockdev: Determine the block size of the file system.
-* /usr/sbin/fsck: Determine the amount of free blocks available in the file system.
+* /usr/sbin/tune2fs: Determine the number of blocks in the device. Use this number to calculate if the device is capable of shrinking to the expected size.
+* /usr/sbin/resize2fs: Determine an estimated maximum free block size of the file system.
+* /usr/bin/cut: extract the UUID from the /etc/fstab entry

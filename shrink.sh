@@ -21,7 +21,7 @@ function read_fstab() {
         fi
         ;;
         esac
-    done < $FSTAB_FILE
+    done < "$FSTAB_FILE"
     echo "${entries[*]}"
 }
 
@@ -30,7 +30,7 @@ function get_device_name() {
     if [[ "$1" == "UUID="* ]]; then
         dev_name=$( parse_uuid "$1" )
     else
-        dev_name=$(cut -d " " -f 1 <<< "$1")
+        dev_name=$(/usr/bin/cut -d " " -f 1 <<< "$1")
     fi
     status=$?
     if [[  status -ne 0 ]]; then
@@ -104,7 +104,7 @@ function parse_uuid() {
 
 
 function shrink_volume() {
-    /usr/sbin/lvreduce --resizefs -L "$2b" "$1"
+    /usr/sbin/lvm lvreduce --resizefs -L "$2b" "$1"
     return $?
 }
 
@@ -122,6 +122,13 @@ function check_volume_size() {
     return $?
 }
 
+function convert_size_to_fs_blocks(){
+    local device=$1
+    local size=$2
+    block_size_in_bytes=$(/usr/sbin/tune2fs -l "$device" | /usr/bin/awk '/Block size:/{print $3}')
+    echo $(( size / block_size_in_bytes ))
+}
+
 function calculate_expected_resized_file_system_size_in_blocks(){
     local device=$1
     increment_boot_partition_in_blocks=$(convert_size_to_fs_blocks "$device" "$INCREMENT_BOOT_PARTITION_SIZE_IN_BYTES")
@@ -134,14 +141,14 @@ function check_filesystem_size() {
     local device=$1
     local new_fs_size_in_blocks=$2
     new_fs_size_in_blocks=$(calculate_expected_resized_file_system_size_in_blocks "$device")
-    # it is possible that running this command after resizing it might give an even smaller number. 
+# it is possible that running this command after resizing it might give an even smaller number. 
     minimum_blocks_required=$(/usr/sbin/resize2fs -P "$device" 2> /dev/null | /usr/bin/awk  '{print $NF}')
 
     if [[ "$new_fs_size_in_blocks" -le "0" ]]; then
         echo "Unable to shrink volume: New size is 0 blocks"
         return 1
     fi
-    if [[ $minimum_blocks_required -gt $new_fs_size_in_blocks ]]; then
+        if [[ $minimum_blocks_required -gt $new_fs_size_in_blocks ]]; then
         echo "Unable to shrink volume: Estimated minimum size of the file system $1 ($minimum_blocks_required blocks) is greater than the new size $new_fs_size_in_blocks blocks" >&2
         return 1
     fi
